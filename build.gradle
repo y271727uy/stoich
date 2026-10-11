@@ -1,0 +1,80 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'dev.stoich'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+def workerVersion = version
+def nativeRoot = layout.buildDirectory.dir('native')
+def nativeLibrary = file('rust/target/release/stoich.dll')
+
+// This machine has no MSVC linker. The GNU toolchain supplies the link, WinLibs supplies dlltool,
+// and protoc compiles the frame schema. Both tool paths can be overridden from the environment.
+def mingwBin = System.getenv('MINGW_BIN') ?: 'D:/document/dev/tools/mingw-bin'
+def protoc = System.getenv('PROTOC') ?: 'D:/document/dev/tools/protoc/bin/protoc.exe'
+
+tasks.register('cargoBuild', Exec) {
+    group = 'stoich'
+    description = 'Compile the Rust solver into stoich.dll.'
+    workingDir = file('rust')
+    environment 'PATH', mingwBin + File.pathSeparator + System.getenv('PATH')
+    environment 'PROTOC', protoc
+    commandLine 'cargo', '+stable-x86_64-pc-windows-gnu', 'build', '-p', 'stoich-worker', '--release'
+    inputs.dir('rust/src')
+    inputs.dir('rust/lib')
+    inputs.dir('rust/buildscript')
+    inputs.file('rust/Cargo.toml')
+    outputs.file(nativeLibrary)
+}
+
+tasks.register('stageWorker', Copy) {
+    group = 'stoich'
+    description = 'Copy stoich.dll into the jar resources for this platform.'
+    dependsOn 'cargoBuild'
+    from(nativeLibrary)
+    into(nativeRoot.map { it.dir('windows-x86_64') })
+    rename { "stoich-${workerVersion}.dll" }
+}
+
+tasks.named('processResources') {
+    dependsOn 'stageWorker'
+    from(nativeRoot) {
+        into 'native'
+    }
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes('Implementation-Title': 'stoich', 'Implementation-Version': workerVersion)
+    }
+}
+
+// `build` already reaches the dll through processResources, but depending on it directly keeps the
+// Rust compile on the task IDEA runs, even if the resource chain changes.
+tasks.named('build') {
+    dependsOn 'cargoBuild'
+}
+
+tasks.withType(Test).configureEach {
+    dependsOn 'cargoBuild'
+    environment 'STOICH_LIBRARY', nativeLibrary.absolutePath
+}

@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package stoich;
+
+option java_package = "y271727uy.stoich.proto";
+option java_multiple_files = true;
+
+// One request or response frame is a 4-byte big-endian length followed by one Envelope.
+// Items are already numbered by the caller. This protocol never carries names or objects.
+
+message Envelope {
+  uint32 protocol_version = 1;
+  oneof body {
+    SolveRequest solve = 2;
+    SolveResponse solved = 3;
+    Shutdown shutdown = 4;
+  }
+}
+
+message SolveRequest {
+  uint64 request_id = 1;
+  uint32 recipes = 2;
+  uint32 items = 3;
+  // CSR columns. Both matrices share the index arrays; only the amount arrays differ.
+  repeated uint32 column_start = 4;
+  repeated uint32 item_index = 5;
+  repeated int64 consumed = 6;
+  repeated int64 produced = 7;
+  repeated int64 stock = 8;
+  repeated int64 target = 9;
+  // Bit i of byte i/8 says item i may be booked as an external import.
+  bytes importable = 10;
+  bool has_candidate = 11;
+  repeated int64 candidate = 12;
+  bool has_order = 13;
+  repeated uint32 order_recipe = 14;
+  repeated int64 order_count = 15;
+  bool has_target_item = 16;
+  uint32 target_item = 17;
+  uint64 max_states = 18;
+}
+
+message SolveResponse {
+  uint64 request_id = 1;
+  Status status = 2;
+  repeated int64 firings = 3;
+  repeated int64 seed = 4;
+  repeated int64 external = 5;
+  repeated int64 shortfall = 6;
+  repeated Step steps = 7;
+  repeated Interval intervals = 8;
+  uint64 states = 9;
+  string detail = 10;
+  // Pareto frontier of the internal input each recipe lacks before its first firing. Present only on
+  // a proven shortage. Each entry is one candidate, aligned to the caller's item numbering.
+  repeated StartupCandidate startup = 11;
+}
+
+message StartupCandidate {
+  repeated int64 missing = 1;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  SUCCESS = 1;
+  INSUFFICIENT_SEED = 2;
+  INFEASIBLE = 3;
+  BUDGET_EXHAUSTED = 4;
+  UNREPRESENTABLE = 5;
+  NOT_CLOSED = 6;
+  REJECTED = 7;
+}
+
+message Step {
+  uint32 recipe = 1;
+  int64 count = 2;
+  uint32 repeat_width = 3;
+  int64 repetitions = 4;
+}
+
+message Interval {
+  int64 lower = 1;
+  bool has_upper = 2;
+  int64 upper = 3;
+}
+
+message Shutdown {}
