@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# The Unix wrapper must keep LF or Linux and macOS runners reject the shebang.
+gradlew text eol=lf

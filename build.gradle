@@ -26,6 +26,10 @@ tasks.named('test') {
 def workerVersion = version
 def nativeRoot = layout.buildDirectory.dir('native')
 def nativeLibrary = file('rust/target/release/stoich.dll')
+// CI builds each platform itself and passes the collected libraries here. Absent on a local build.
+def prebuiltRoot = findProperty('stoichPrebuilt')
+def skipNative = findProperty('stoichSkipNative') != null || prebuiltRoot != null
+def libraryOverride = findProperty('stoichLibrary')
 
 // This machine has no MSVC linker. The GNU toolchain supplies the link, WinLibs supplies dlltool,
 // and protoc compiles the frame schema. Both tool paths can be overridden from the environment.
@@ -49,14 +53,45 @@ tasks.register('cargoBuild', Exec) {
 tasks.register('stageWorker', Copy) {
     group = 'stoich'
     description = 'Copy stoich.dll into the jar resources for this platform.'
+    onlyIf { !skipNative }
     dependsOn 'cargoBuild'
     from(nativeLibrary)
     into(nativeRoot.map { it.dir('windows-x86_64') })
     rename { "stoich-${workerVersion}.dll" }
 }
 
+// Cargo names in, versioned jar names out. A missing platform is skipped, not an error.
+def prebuiltNames = [
+    'windows-x86_64': ['stoich.dll', "stoich-${workerVersion}.dll"],
+    'linux-x86_64'  : ['libstoich.so', "libstoich-${workerVersion}.so"],
+    'linux-aarch64' : ['libstoich.so', "libstoich-${workerVersion}.so"],
+    'macos-x86_64'  : ['libstoich.dylib', "libstoich-${workerVersion}.dylib"],
+    'macos-aarch64' : ['libstoich.dylib', "libstoich-${workerVersion}.dylib"],
+]
+
+tasks.register('stagePrebuilt') {
+    group = 'stoich'
+    description = 'Stage native libraries built on other machines, one directory per platform.'
+    onlyIf { prebuiltRoot != null }
+    def source = prebuiltRoot == null ? file('prebuilt') : file(prebuiltRoot)
+    inputs.dir(source).optional()
+    outputs.dir(nativeRoot)
+    doLast {
+        prebuiltNames.each { platform, pair ->
+            def incoming = new File(source, "${platform}/${pair[0]}")
+            if (!incoming.isFile()) {
+                return
+            }
+            def outDir = nativeRoot.get().dir(platform).asFile
+            outDir.mkdirs()
+            java.nio.file.Files.copy(incoming.toPath(), new File(outDir, pair[1]).toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
+
 tasks.named('processResources') {
-    dependsOn 'stageWorker'
+    dependsOn(prebuiltRoot != null ? 'stagePrebuilt' : 'stageWorker')
     from(nativeRoot) {
         into 'native'
     }
@@ -71,10 +106,14 @@ tasks.named('jar') {
 // `build` already reaches the dll through processResources, but depending on it directly keeps the
 // Rust compile on the task IDEA runs, even if the resource chain changes.
 tasks.named('build') {
-    dependsOn 'cargoBuild'
+    if (!skipNative) {
+        dependsOn 'cargoBuild'
+    }
 }
 
 tasks.withType(Test).configureEach {
-    dependsOn 'cargoBuild'
-    environment 'STOICH_LIBRARY', nativeLibrary.absolutePath
+    if (!skipNative) {
+        dependsOn 'cargoBuild'
+    }
+    environment 'STOICH_LIBRARY', libraryOverride ? file(libraryOverride).absolutePath : nativeLibrary.absolutePath
 }
