@@ -53,7 +53,9 @@ public final class NativeSolver {
             return Path.of(override);
         }
         String resource = "/native/" + platform() + "/" + libraryName(VERSION);
-        Path directory = Path.of(System.getProperty("user.dir"), ".stoich");
+        // Android reports os.name as Linux, and its working directory is not writable.
+        String base = android() ? System.getProperty("java.io.tmpdir", ".") : System.getProperty("user.dir", ".");
+        Path directory = Path.of(base, ".stoich");
         Files.createDirectories(directory);
         Path destination = directory.resolve(libraryName(VERSION));
         if (Files.exists(destination)) {
@@ -78,11 +80,34 @@ public final class NativeSolver {
     }
 
     private static String platform() {
+        if (android()) {
+            return "android-" + androidAbi();
+        }
         String os = System.getProperty("os.name", "").toLowerCase();
         String arch = System.getProperty("os.arch", "").toLowerCase();
         String family = os.contains("win") ? "windows" : os.contains("mac") ? "macos" : "linux";
         String architecture = arch.contains("aarch64") || arch.contains("arm64") ? "aarch64" : "x86_64";
         return family + "-" + architecture;
+    }
+
+    private static boolean android() {
+        String vendor = System.getProperty("java.vendor", "");
+        String specification = System.getProperty("java.specification.vendor", "");
+        return vendor.contains("Android") || specification.contains("Android");
+    }
+
+    private static String androidAbi() {
+        String arch = System.getProperty("os.arch", "").toLowerCase();
+        if (arch.contains("aarch64") || arch.contains("arm64")) {
+            return "arm64-v8a";
+        }
+        if (arch.contains("arm")) {
+            return "armeabi-v7a";
+        }
+        if (arch.contains("x86_64") || arch.contains("amd64")) {
+            return "x86_64";
+        }
+        return "x86";
     }
 
     private static String libraryName(String version) {

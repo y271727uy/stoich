@@ -67,6 +67,10 @@ def prebuiltNames = [
     'linux-aarch64' : ['libstoich.so', "libstoich-${workerVersion}.so"],
     'macos-x86_64'  : ['libstoich.dylib', "libstoich-${workerVersion}.dylib"],
     'macos-aarch64' : ['libstoich.dylib', "libstoich-${workerVersion}.dylib"],
+    'android-arm64-v8a'  : ['libstoich.so', "libstoich-${workerVersion}.so"],
+    'android-armeabi-v7a': ['libstoich.so', "libstoich-${workerVersion}.so"],
+    'android-x86_64'     : ['libstoich.so', "libstoich-${workerVersion}.so"],
+    'android-x86'        : ['libstoich.so', "libstoich-${workerVersion}.so"],
 ]
 
 tasks.register('stagePrebuilt') {
