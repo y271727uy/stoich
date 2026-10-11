@@ -54,7 +54,10 @@ tasks.register('stageWorker', Copy) {
     group = 'stoich'
     description = 'Copy stoich.dll into the jar resources for this platform.'
     onlyIf { !skipNative }
-    dependsOn 'cargoBuild'
+    // onlyIf does not skip dependencies. Keep the Windows GNU build off the CI test graph.
+    if (!skipNative) {
+        dependsOn 'cargoBuild'
+    }
     from(nativeLibrary)
     into(nativeRoot.map { it.dir('windows-x86_64') })
     rename { "stoich-${workerVersion}.dll" }
@@ -95,7 +98,11 @@ tasks.register('stagePrebuilt') {
 }
 
 tasks.named('processResources') {
-    dependsOn(prebuiltRoot != null ? 'stagePrebuilt' : 'stageWorker')
+    if (prebuiltRoot != null) {
+        dependsOn 'stagePrebuilt'
+    } else if (!skipNative) {
+        dependsOn 'stageWorker'
+    }
     from(nativeRoot) {
         into 'native'
     }

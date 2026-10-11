@@ -46,7 +46,7 @@ jobs:
         run: cargo build -p stoich-worker --release
       - name: test through jni
         shell: bash
-        run: ./gradlew test --no-daemon -PstoichSkipNative=true "-PstoichLibrary=${{ github.workspace }}/rust/target/release/${{ matrix.library }}"
+        run: bash ./gradlew test --no-daemon -PstoichSkipNative=true "-PstoichLibrary=${{ github.workspace }}/rust/target/release/${{ matrix.library }}"
       - name: pack the library
         shell: bash
         run: |
@@ -110,7 +110,7 @@ jobs:
           path: prebuilt
           merge-multiple: true
       - name: build the jar
-        run: ./gradlew jar --no-daemon -PstoichPrebuilt=prebuilt -PstoichSkipNative=true
+        run: bash ./gradlew jar --no-daemon -PstoichPrebuilt=prebuilt -PstoichSkipNative=true
       - uses: actions/upload-artifact@v4
         with:
           name: stoich-jar
